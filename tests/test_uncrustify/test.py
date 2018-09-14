@@ -15,10 +15,16 @@ from .config import (config, test_dir, FAIL_ATTRS,
                      MISMATCH_ATTRS, UNSTABLE_ATTRS)
 from .failure import (ExecutionFailure, MissingFailure,
                       MismatchFailure, UnstableFailure)
+from .manip import Manipulators
+
+if os.name == 'nt':
+    NULL_DEVICE = 'nul'
+else:
+    NULL_DEVICE = '/dev/null'
 
 
 # =============================================================================
-class SourceTest(object):
+class Test(object):
     # -------------------------------------------------------------------------
     def __init__(self):
         self.test_result_dir = 'results'
@@ -45,6 +51,209 @@ class SourceTest(object):
         cmd = [config.git_exe, 'diff', '--no-index', expected, actual]
         subprocess.call(cmd)
 
+    # -------------------------------------------------------------------------
+    def _compare(self, expected, actual, args):
+        try:
+            if not filecmp.cmp(expected, actual):
+                printc('{}: '.format(self.diff_text),
+                       self.test_name, **self.diff_attrs)
+                if args.diff:
+                    self._diff(expected, actual)
+                raise self.diff_exception(expected, actual)
+        except OSError as exc:
+            printc('MISSING: ', self.test_name, **self.diff_attrs)
+            raise MissingFailure(exc, expected)
+
+
+# =============================================================================
+class FrontEndTest(Test):
+    # -------------------------------------------------------------------------
+    def __init__(self, name, conf):
+        super(FrontEndTest, self).__init__()
+
+        self.test_name = name
+
+        self.test_args = conf.get('args', [])
+        self.test_config = conf.get('config')
+
+        self._build(conf, 'out', 'stdout', True)
+        self._build(conf, 'err', 'stderr', True)
+        self._build(conf, 'gen', 'output', False)
+
+    # -------------------------------------------------------------------------
+    def _build(self, conf, prefix, name, implicit):
+        empty = not (prefix in conf or implicit)
+        conf = conf.get(prefix) or {}
+
+        # Set path to expected
+        _expected = prefix + '_expected'
+        name_parts = self.test_name.split(':')
+
+        if 'expected' in conf:
+            setattr(self, _expected, conf['expected'])
+            self._make_abs(_expected, os.path.join('expected', name_parts[0]))
+
+        elif not empty:
+            setattr(self, _expected, '{}-{}.txt'.format(name_parts[1], name))
+            self._make_abs(_expected, os.path.join('expected', name_parts[0]))
+
+            if not os.path.exists(getattr(self, _expected)):
+                setattr(self, _expected, None)
+
+        else:
+            setattr(self, _expected, None)
+
+        # Set base name of result; used later to build full path
+        setattr(self, prefix + '_result', name if not empty else None)
+
+        # Set manipulators
+        manip = []
+        ms = conf.get('manip')
+        if ms is not None:
+            if type(ms) is not list:
+                ms = [ms]
+
+            for m in ms:
+                if type(m) is dict:
+                    for mf, ma in m.items():
+                        mf = getattr(Manipulators, mf)
+                        manip.append([mf] + (ma or []))
+                else:
+                    manip.append([getattr(Manipulators, m)])
+
+        setattr(self, prefix + '_manip', manip)
+
+    # -------------------------------------------------------------------------
+    def _paths(self, prefix, args):
+        name_parts = self.test_name.split(':')
+
+        expected = getattr(self, '{}_expected'.format(prefix))
+        result_name = getattr(self, '{}_result'.format(prefix))
+
+        if result_name is None:
+            result = None
+
+        else:
+            result = os.path.join(
+                args.result_dir, self.test_result_dir, name_parts[0],
+                '{}-{}.txt'.format(name_parts[1], result_name))
+
+            if not os.path.exists(os.path.dirname(result)):
+                os.makedirs(os.path.dirname(result))
+
+        return expected, result
+
+    # -------------------------------------------------------------------------
+    def _purge(self, path):
+        if path is not None and os.path.exists(path):
+            os.unlink(path)
+
+    # -------------------------------------------------------------------------
+    def _mangle(self, path, prefix):
+        # Get manipulators
+        manip = getattr(self, prefix + '_manip')
+
+        if not len(manip):
+            return
+
+        # Rename original so we can write the mangled version in its place
+        path_orig = path + '.orig'
+        os.rename(path, path_orig)
+
+        with open(path, 'wb') as out:
+            with open(path_orig, 'rb') as f:
+                # Iterate over lines in original
+                for line in f:
+                    line = line.decode('utf-8')
+
+                    # Apply manipulators
+                    for m in manip:
+                        line = m[0](line, *m[1:])
+
+                    # Write result
+                    out.write(line.encode('utf-8'))
+
+    # -------------------------------------------------------------------------
+    def _compare(self, expected, actual, args):
+        # Expected might be None if we expect "no output"
+        if expected is None:
+            # If we didn't produce an output (only applies to 'gen', not 'out'
+            # or 'err'), then we have nothing to do
+            if actual is None:
+                return
+
+            # If the actual output is empty, that's a pass
+            if os.stat(actual).st_size == 0:
+                return
+
+            # If we got unexpected output, compare against the null device
+            expected = NULL_DEVICE
+
+        # Hand off to base implementation
+        super(FrontEndTest, self)._compare(expected, actual, args)
+
+    # -------------------------------------------------------------------------
+    def run(self, args):
+        # Get paths of expected outputs
+        _expected_out, _result_out = self._paths('out', args)
+        _expected_err, _result_err = self._paths('err', args)
+        _expected_gen, _result_gen = self._paths('gen', args)
+
+        # Ensure no stale results are present
+        self._purge(_result_out)
+        self._purge(_result_err)
+        self._purge(_result_gen)
+
+        # Show test information, if requested
+        if args.verbose:
+            print(self.test_name)
+            print('       Arguments : {!r}'.format(self.test_args))
+            print(' Expected stdout : {}'.format(_expected_out))
+            print(' Expected stderr : {}'.format(_expected_err))
+            print(' Expected Output : {}'.format(_expected_gen))
+            print('   Result stdout : {}'.format(_result_out))
+            print('   Result stderr : {}'.format(_result_err))
+            print('   Result Output : {}'.format(_result_gen))
+
+        # Open files to receive stdout, stderr
+        stdout = open(_result_out, 'wb')
+        stderr = open(_result_err, 'wb')
+
+        # Build command
+        cmd = [config.uncrustify_exe] + self.test_args
+        if self.test_config is not None:
+            cmd += ['-c', self.test_config]
+        if _result_gen is not None:
+            cmd += ['-o', _result_gen]
+
+        if args.show_commands:
+            printc('RUN: ', repr(cmd))
+
+        # Execute uncrustify
+        try:
+            subprocess.check_call(cmd, stdout=stdout, stderr=stderr)
+        except subprocess.CalledProcessError as exc:
+            msg = '{}: Uncrustify error code {}'
+            msg = msg.format(self.test_name, exc.returncode)
+            printc('FAILED: ', msg, **FAIL_ATTRS)
+            raise ExecutionFailure(exc)
+        finally:
+            del stdout
+            del stderr
+
+        # Apply manipulators to outputs
+        self._mangle(_result_out, 'out')
+        self._mangle(_result_err, 'err')
+        self._mangle(_result_gen, 'gen')
+
+        # Compare outputs
+        self._compare(_expected_out, _result_out, args)
+        self._compare(_expected_err, _result_err, args)
+        self._compare(_expected_gen, _result_gen, args)
+
+
+# =============================================================================
+class SourceTest(Test):
     # -------------------------------------------------------------------------
     def build(self, test_input, test_lang, test_config):
         self.test_name = os.path.basename(test_input)
@@ -94,7 +303,7 @@ class SourceTest(object):
                 '-LA',
                 '-p', _result + '.unc'
             ]
-            stderr = open(_result + '.log', 'wt')
+            stderr = open(_result + '.log', 'wb')
 
         else:
             cmd += ['-L1,2']
@@ -113,16 +322,8 @@ class SourceTest(object):
         finally:
             del stderr
 
-        try:
-            if not filecmp.cmp(_expected, _result):
-                printc('{}: '.format(self.diff_text),
-                       self.test_name, **self.diff_attrs)
-                if args.diff:
-                    self._diff(_expected, _result)
-                raise self.diff_exception(_expected, _result)
-        except OSError as exc:
-            printc('MISSING: ', self.test_name, **self.diff_attrs)
-            raise MissingFailure(exc, _expected)
+        self._compare(_expected, _result, args)
+
 
 # =============================================================================
 class FormatTest(SourceTest):

@@ -1,0 +1,65 @@
+#
+# Test cases specifically for uncrustify's front-end.
+#
+# Range: 20000 - 21999
+# see cli-test.txt for syntax documentation
+
+# Test help
+---
+.:
+  out:
+    expected: help-stdout.txt
+    manip:
+      - string_replace: [
+        " --mtime      : Preserve mtime on replaced files.\n", '']
+      - string_replace: ['.exe', '']
+
+20000: { args: ['-?']      }
+20001: { args: ['-h']      }
+20002: { args: ['--help']  }
+20003: { args: ['--usage'] }
+
+# Test show-config
+---
+20010:
+  args: ['--show-config']
+  out:
+    manip: normalize_version
+
+# Test update-config[-with-doc]
+---
+.:
+  out:
+    manip: normalize_version
+  err:
+    expected: mini_d-stderr.txt
+    manip:
+      - string_replace: ['\', '/']
+
+20011:
+  args: ['--update-config']
+  config: mini_d.cfg
+
+20012:
+  args: ['--update-config']
+  config: mini_nd.cfg
+
+20013:
+  args: ['--update-config-with-doc']
+  config: mini_d.cfg
+
+20014:
+  args: ['--update-config-with-doc']
+  config: mini_nd.cfg
+
+
+# Test universalindentgui
+---
+20018:
+  args: ['--universalindent']
+  gen:
+    manip:
+      - normalize_version:
+      - regex_replace: ['(?<=Description="<html>)\(\d+\)', '']
+
+# kate: hl YAML

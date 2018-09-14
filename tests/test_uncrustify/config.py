@@ -9,7 +9,11 @@ import os
 
 test_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
-all_tests = [
+frontend_tests = ['cli']
+
+parse_tests = ['parse']
+
+format_tests = [
     'c-sharp',
     'c',
     'cpp',

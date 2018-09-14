@@ -1,0 +1,1 @@
+mini_d.cfg:2: unknown symbol 'not_existing_option'

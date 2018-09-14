@@ -9,15 +9,19 @@ import argparse
 import os
 import subprocess
 import sys
+import yaml
 
 from .ansicolor import printc
-from .config import config, all_tests, FAIL_ATTRS, PASS_ATTRS, SKIP_ATTRS
+from .config import (config, frontend_tests, parse_tests, format_tests,
+                     FAIL_ATTRS, PASS_ATTRS, SKIP_ATTRS)
 from .failure import Failure, MismatchFailure, UnstableFailure
-from .test import FormatTest
+from .test import FrontEndTest, FormatTest # TODO ParseTest
 
 
 # -----------------------------------------------------------------------------
-def _add_common_arguments(parser):
+def _add_common_arguments(parser, debuggable=True,
+                          single=False, selectable=True):
+
     parser.add_argument('-c', '--show-commands', action='store_true',
                         help='show commands')
 
@@ -27,8 +31,17 @@ def _add_common_arguments(parser):
     parser.add_argument('-d', '--diff', action='store_true',
                         help='show diff on failure')
 
-    parser.add_argument('-g', '--debug', action='store_true',
-                        help='generate debug files (.log, .unc)')
+    if debuggable:
+        parser.add_argument('-g', '--debug', action='store_true',
+                            help='generate debug files (.log, .unc)')
+
+    if not single:
+        parser.add_argument('-p', '--show-all', action='store_true',
+                            help='show passed/skipped tests')
+
+    if selectable and not single:
+        parser.add_argument('-r', '--select', metavar='CASE(S)', type=str,
+                            help='select tests to be executed')
 
     parser.add_argument('-e', '--executable', type=str, required=True,
                         metavar='PATH',
@@ -45,7 +58,7 @@ def _add_common_arguments(parser):
 
 # -----------------------------------------------------------------------------
 def add_test_arguments(parser):
-    _add_common_arguments(parser)
+    _add_common_arguments(parser, single=True)
 
     parser.add_argument("name",                 type=str, metavar='NAME')
     parser.add_argument("--lang",               type=str, required=True)
@@ -58,24 +71,33 @@ def add_test_arguments(parser):
 
 # -----------------------------------------------------------------------------
 def add_source_tests_arguments(parser):
-    _add_common_arguments(parser)
+    _add_common_arguments(parser, selectable=False)
 
-    parser.add_argument('-p', '--show-all', action='store_true',
-                        help='show passed/skipped tests')
+
+# -----------------------------------------------------------------------------
+def add_frontend_tests_arguments(parser):
+    _add_common_arguments(parser, debuggable=False)
+
+    parser.add_argument('tests', metavar='TEST', type=str, nargs='*',
+                        default=frontend_tests,
+                        help='test(s) to run (default all)')
+
+
+# -----------------------------------------------------------------------------
+def add_parse_tests_arguments(parser):
+    _add_common_arguments(parser, debuggable=False)
+
+    parser.add_argument('tests', metavar='TEST', type=str, nargs='*',
+                        default=parse_tests,
+                        help='test(s) to run (default all)')
 
 
 # -----------------------------------------------------------------------------
 def add_format_tests_arguments(parser):
     _add_common_arguments(parser)
 
-    parser.add_argument('-p', '--show-all', action='store_true',
-                        help='show passed/skipped tests')
-
-    parser.add_argument('-r', '--select', metavar='CASE(S)', type=str,
-                        help='select tests to be executed')
-
     parser.add_argument('tests', metavar='TEST', type=str, nargs='*',
-                        default=all_tests,
+                        default=format_tests,
                         help='test(s) to run (default all)')
 
     # Arguments for generating the CTest script; users should not use these
@@ -163,6 +185,31 @@ def report(counts):
         printc('{unstable} tests were unstable'.format(**counts),
                **FAIL_ATTRS)
 
+
+# -----------------------------------------------------------------------------
+def read_frontend_tests(filename, group):
+    tests = []
+
+    print("Processing " + filename)
+    with open(filename, 'rt') as f:
+        for block in yaml.safe_load_all(f):
+            base = block.get('.', {})
+            for num, detail in block.items():
+                if num == '.':
+                    continue
+
+                conf = dict(base)
+                conf.update(detail)
+
+                name = '{}:{}'.format(group, num)
+                test = FrontEndTest(name, conf)
+                tests.append(test)
+
+    return tests
+
+# -----------------------------------------------------------------------------
+def read_parse_tests(filename, group):
+    pass # TODO
 
 # -----------------------------------------------------------------------------
 def read_format_tests(filename, group):
