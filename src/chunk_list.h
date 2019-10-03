@@ -744,6 +744,18 @@ static inline bool chunk_is_msref(chunk_t *pc) // ms compilers for C++/CLI and W
 }
 
 
+static inline bool chunk_is_binary_operator(chunk_t *pc)
+{
+   return(  chunk_is_token(pc, CT_COMPARE)
+         || chunk_is_token(pc, CT_SCOMPARE)
+         || chunk_is_token(pc, CT_BOOL)
+         || chunk_is_token(pc, CT_SBOOL)
+         || chunk_is_token(pc, CT_ARITH)
+         || chunk_is_token(pc, CT_SARITH)
+         || chunk_is_token(pc, CT_CARET));
+}
+
+
 static inline bool chunk_is_ptr_operator(chunk_t *pc)
 {
    return(  (  chunk_is_star(pc)

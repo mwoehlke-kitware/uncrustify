@@ -1116,7 +1116,10 @@ static void check_template(chunk_t *start)
             }
          }
          else if (  in_if
-                 && (chunk_is_token(pc, CT_BOOL) || chunk_is_token(pc, CT_COMPARE)))
+                 && (  chunk_is_token(pc, CT_BOOL)
+                    || chunk_is_token(pc, CT_SBOOL)
+                    || chunk_is_token(pc, CT_COMPARE)
+                    || chunk_is_token(pc, CT_SCOMPARE)))
          {
             break;
          }
@@ -1206,7 +1209,8 @@ static void check_template_arg(chunk_t *start, chunk_t *end)
       if (next->type != CT_PAREN_OPEN)
       {
          if (  chunk_is_token(pc, CT_NUMBER)
-            || chunk_is_token(pc, CT_ARITH))
+            || chunk_is_token(pc, CT_ARITH)
+            || chunk_is_token(pc, CT_SARITH))
          {
             expressionIsNumeric = true;
             break;

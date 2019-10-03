@@ -3035,7 +3035,7 @@ static void fix_casts(chunk_t *start)
    }
    if (  chunk_is_semicolon(pc)
       || chunk_is_token(pc, CT_COMMA)
-      || chunk_is_token(pc, CT_BOOL)               // Issue #2151
+      || chunk_is_binary_operator(pc)  // Issue #2151, #2427
       || chunk_is_paren_close(pc))
    {
       LOG_FMT(LCASTS, "%s(%d):  -- not a cast - followed by type %s\n",

@@ -438,16 +438,19 @@ static bool split_line(chunk_t *start)
    else
    {
       if (  (  (  chunk_is_token(ent.pc, CT_ARITH)
+               || chunk_is_token(ent.pc, CT_SARITH)
                || chunk_is_token(ent.pc, CT_CARET))
             && (options::pos_arith() & TP_LEAD))
          || (  chunk_is_token(ent.pc, CT_ASSIGN)
             && (options::pos_assign() & TP_LEAD))
-         || (  chunk_is_token(ent.pc, CT_COMPARE)
+         || (  (  chunk_is_token(ent.pc, CT_COMPARE)
+               || chunk_is_token(ent.pc, CT_SCOMPARE))
             && (options::pos_compare() & TP_LEAD))
          || (  (  chunk_is_token(ent.pc, CT_COND_COLON)
                || chunk_is_token(ent.pc, CT_QUESTION))
             && (options::pos_conditional() & TP_LEAD))
-         || (  chunk_is_token(ent.pc, CT_BOOL)
+         || (  (  chunk_is_token(ent.pc, CT_BOOL)
+               || chunk_is_token(ent.pc, CT_SBOOL))
             && (options::pos_bool() & TP_LEAD)))
       {
          pc = ent.pc;

@@ -387,7 +387,7 @@
 
 30958  nl_for_leave_one_liners-f.cfg        cpp/nl_for_leave_one_liners.cpp
 30959  nl_for_leave_one_liners-t.cfg        cpp/nl_for_leave_one_liners.cpp
-30960  Issue_2151.cfg                       cpp/Issue_2151.cpp
+30960  Issue_2427.cfg                       cpp/Issue_2427.cpp
 30961  Issue_2232.cfg                       cpp/Issue_2232.cpp
 30962  nl_assign_leave_one_liners.cfg     cpp/nl_assign_leave_one_liners.cpp
 

@@ -727,16 +727,13 @@ static void parse_cleanup(ParseFrame &frm, chunk_t *pc)
    LOG_FMT(LSTMT, "%s(%d): Mark expression starts: orig_line is %zu, orig_col is %zu, text() is '%s'\n",
            __func__, __LINE__, pc->orig_line, pc->orig_col, pc->text());
    chunk_t *tmp = chunk_get_next_ncnl(pc);
-   if (  chunk_is_token(pc, CT_ARITH)
+   if (  chunk_is_binary_operator(pc)
       || chunk_is_token(pc, CT_ASSIGN)
       || chunk_is_token(pc, CT_CASE)
-      || chunk_is_token(pc, CT_COMPARE)
       || (  chunk_is_token(pc, CT_STAR)
          && tmp != nullptr && tmp->type != CT_STAR)
-      || chunk_is_token(pc, CT_BOOL)
       || chunk_is_token(pc, CT_MINUS)
       || chunk_is_token(pc, CT_PLUS)
-      || chunk_is_token(pc, CT_CARET)
       || chunk_is_token(pc, CT_ANGLE_OPEN)
       || chunk_is_token(pc, CT_ANGLE_CLOSE)
       || chunk_is_token(pc, CT_RETURN)
