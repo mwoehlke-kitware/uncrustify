@@ -186,10 +186,10 @@ public:
 
 
 protected:
-   void update_logtext();
+   void update_logtext() const;
 
-   value_type m_chars;           //! this contains the non-encoded 31-bit chars
-   log_type   m_logtext;         //! logging text, utf8 encoded - updated in c_str()
+   value_type       m_chars;   //! this contains the non-encoded 31-bit chars
+   mutable log_type m_logtext; //! logging text, utf8 encoded - updated in c_str()
 };
 
 

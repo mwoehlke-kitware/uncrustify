@@ -3,8 +3,7 @@
  * Does all the output & comment formatting.
  *
  * @author  Ben Gardner
- * @author  Guy Maurel since version 0.62 for uncrustify4Qt
- *          October 2015, 2016
+ * @author  Guy Maurel October 2015, 2021
  * @license GPL v2+
  */
 
@@ -2061,8 +2060,8 @@ static void output_comment_multi(chunk_t *pc)
    line.clear();
    LOG_FMT(LCONTTEXT, "%s(%d): pc->len() is %zu\n",
            __func__, __LINE__, pc->len());
-   LOG_FMT(LCONTTEXT, "%s(%d): pc->str is %s\n",
-           __func__, __LINE__, pc->str.c_str());
+   //LOG_FMT(LCONTTEXT, "%s(%d): pc->str is %s\n",
+   //        __func__, __LINE__, pc->str.c_str());
 
    /**
     * check for enable/disable processing comment strings that may

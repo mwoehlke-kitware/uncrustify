@@ -8,6 +8,7 @@
 
 #include "unc_text.h"
 
+#include "options.h"
 #include "unc_ctype.h"
 #include "unicode.h" // encode_utf8()
 
@@ -33,19 +34,15 @@ static void toLogTextUtf8(int c, unc_text::log_type &container);
  *
  * throws if char is greater than 0x7fffffff
  */
-static int getLogTextUtf8Len(unc_text::value_type &c0, size_t end);
-
-static int getLogTextUtf8Len(unc_text::value_type &c0, size_t start, size_t end);
+static size_t getLogTextUtf8Len(unc_text::value_type const &in);
 
 
-static int getLogTextUtf8Len(unc_text::value_type &c0, size_t start, size_t end)
+static size_t getLogTextUtf8Len(unc_text::value_type const &in)
 {
    size_t c1_idx = 0;
 
-   for (size_t i = start; i < end; ++i)
+   for (auto ch : in)
    {
-      auto ch = c0[i];
-
       if (ch == '\n')
       {
          ch = 0x2424;  // NL symbol
@@ -88,12 +85,6 @@ static int getLogTextUtf8Len(unc_text::value_type &c0, size_t start, size_t end)
 
    return(c1_idx);
 } // getLogTextUTF8Len
-
-
-static int getLogTextUtf8Len(unc_text::value_type &c0, size_t end)
-{
-   return(getLogTextUtf8Len(c0, 0, end));
-}
 
 
 static void toLogTextUtf8(int c, unc_text::log_type &container)
@@ -257,7 +248,7 @@ void unc_text::pop_back()
       return;
    }
    m_chars.pop_back();
-   update_logtext();
+   m_logtext.clear();
 }
 
 
@@ -268,19 +259,30 @@ void unc_text::pop_front()
       return;
    }
    m_chars.pop_front();
-   update_logtext();
+   m_logtext.clear();
 }
 
 
-void unc_text::update_logtext()
+void unc_text::update_logtext() const
 {
-   // make a pessimistic guess at the size
    m_logtext.clear();
-   m_logtext.reserve(m_chars.size() * 3);
+   m_logtext.reserve(getLogTextUtf8Len(m_chars) + 1);
+
+   auto const limit   = uncrustify::options::debug_truncate();
+   size_t     encoded = 0;
 
    for (int m_char : m_chars)
    {
       toLogTextUtf8(m_char, m_logtext);
+
+      if (  limit != 0
+         && ++encoded > limit)
+      {
+         for (auto const ch : " ... (truncated)")
+         {
+            m_logtext.push_back(static_cast<UINT8>(ch));
+         }
+      }
    }
 
    m_logtext.push_back(0);
@@ -357,19 +359,19 @@ bool unc_text::equals(const unc_text &ref) const
 
 const char *unc_text::c_str() const
 {
+   if (m_logtext.empty())
+   {
+      update_logtext();
+   }
    return(reinterpret_cast<const char *>(&m_logtext[0]));
 }
 
 
 void unc_text::set(int ch)
 {
-   m_logtext.clear();
-   toLogTextUtf8(ch, m_logtext);
-   m_logtext.push_back('\0');
-
-
    m_chars.clear();
    m_chars.push_back(ch);
+   m_logtext.clear();
 }
 
 
@@ -387,7 +389,7 @@ void unc_text::set(const unc_text &ref, size_t idx, size_t len)
    if (len == ref_size)
    {
       m_chars = ref.m_chars;
-      update_logtext();
+      m_logtext.clear();
       return;
    }
    m_chars.resize(len);
@@ -401,7 +403,7 @@ void unc_text::set(const unc_text &ref, size_t idx, size_t len)
       m_chars[di] = ref.m_chars[idx];
    }
 
-   update_logtext();
+   m_logtext.clear();
 }
 
 
@@ -416,7 +418,7 @@ void unc_text::set(const string &ascii_text)
       m_chars[idx] = ascii_text[idx];
    }
 
-   update_logtext();
+   m_logtext.clear();
 }
 
 
@@ -431,7 +433,7 @@ void unc_text::set(const char *ascii_text)
       m_chars[idx] = *ascii_text++;
    }
 
-   update_logtext();
+   m_logtext.clear();
 }
 
 
@@ -448,7 +450,7 @@ void unc_text::set(const value_type &data, size_t idx, size_t len)
       m_chars[di] = data[idx];
    }
 
-   update_logtext();
+   m_logtext.clear();
 }
 
 
@@ -458,13 +460,8 @@ void unc_text::resize(size_t new_size)
    {
       return;
    }
-   const auto log_new_size = getLogTextUtf8Len(m_chars, new_size);
-
-   m_logtext.resize(log_new_size + 1); // one extra for \0
-   m_logtext[log_new_size] = '\0';
-
-
    m_chars.resize(new_size);
+   m_logtext.clear();
 }
 
 
@@ -472,7 +469,6 @@ void unc_text::clear()
 {
    m_logtext.clear();
    m_logtext.push_back('\0');
-
 
    m_chars.clear();
 }
@@ -485,20 +481,8 @@ void unc_text::insert(size_t idx, int ch)
       throw out_of_range(string(__func__) + ":" + to_string(__LINE__)
                          + " - idx >= m_chars.size()");
    }
-   log_type utf8converted;
-
-   utf8converted.reserve(UTF8_BLOCKS);
-   toLogTextUtf8(ch, utf8converted);
-
-   const auto utf8_idx = getLogTextUtf8Len(m_chars, idx);
-
-   m_logtext.pop_back(); // remove '\0'
-   m_logtext.insert(std::next(std::begin(m_logtext), utf8_idx),
-                    std::begin(utf8converted), std::end(utf8converted));
-   m_logtext.push_back('\0');
-
-
    m_chars.insert(std::next(std::begin(m_chars), idx), ch);
+   m_logtext.clear();
 }
 
 
@@ -514,44 +498,16 @@ void unc_text::insert(size_t idx, const unc_text &ref)
       throw out_of_range(string(__func__) + ":" + to_string(__LINE__)
                          + " - idx >= m_chars.size()");
    }
-   const auto utf8_idx = getLogTextUtf8Len(m_chars, idx);
-
-   // (A+B) remove \0 from both containers, add back a single at the end
-   m_logtext.pop_back(); // A
-   m_logtext.insert(std::next(std::begin(m_logtext), utf8_idx),
-                    std::begin(ref.m_logtext),
-                    std::prev(std::end(ref.m_logtext))); // B
-   m_logtext.push_back('\0');
-
-
    m_chars.insert(std::next(std::begin(m_chars), idx),
                   std::begin(ref.m_chars), std::end(ref.m_chars));
+   m_logtext.clear();
 }
 
 
 void unc_text::append(int ch)
 {
-   m_logtext.pop_back();
-
-   if (  ch < 0x80
-      && ch != '\n'
-      && ch != '\r')
-   {
-      m_logtext.push_back(ch);
-   }
-   else
-   {
-      log_type utf8converted;
-      utf8converted.reserve(UTF8_BLOCKS);
-      toLogTextUtf8(ch, utf8converted);
-
-      m_logtext.insert(std::end(m_logtext),
-                       std::begin(utf8converted), std::end(utf8converted));
-   }
-   m_logtext.push_back('\0');
-
-
    m_chars.push_back(ch);
+   m_logtext.clear();
 }
 
 
@@ -561,11 +517,8 @@ void unc_text::append(const unc_text &ref)
    {
       return;
    }
-   m_logtext.pop_back();
-   m_logtext.insert(std::end(m_logtext),
-                    std::begin(ref.m_logtext), std::end(ref.m_logtext));
-
    m_chars.insert(m_chars.end(), ref.m_chars.begin(), ref.m_chars.end());
+   m_logtext.clear();
 }
 
 
@@ -722,17 +675,9 @@ void unc_text::erase(size_t start_idx, size_t len)
       throw out_of_range(string(__func__) + ":" + to_string(__LINE__)
                          + " - idx + len >= m_chars.size()");
    }
-   const auto pos_s = getLogTextUtf8Len(m_chars, start_idx);
-   const auto pos_e = pos_s + getLogTextUtf8Len(m_chars, start_idx, end_idx);
-
-   m_logtext.pop_back();
-   m_logtext.erase(std::next(std::begin(m_logtext), pos_s),
-                   std::next(std::begin(m_logtext), pos_e + 1));
-   m_logtext.push_back('\0');
-
-
    m_chars.erase(std::next(std::begin(m_chars), start_idx),
                  std::next(std::begin(m_chars), end_idx + 1));
+   m_logtext.clear();
 }
 
 
